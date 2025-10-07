@@ -32,7 +32,6 @@ GATK_CMD="${GATK_CMD:-singularity exec ${SINGULARITY_BIND} ${GATK_SIF} gatk}"
 ANALYZER_CMD="$GATK_CMD"
 BCFTOOLS="${BCFTOOLS:-bcftools}"
 
-# 便利パス
 TMPDIR_ROOT="${TMPDIR_ROOT:-$HOME/working/tmp_gatk}"
 SCRIPTS_DIR="${SCRIPTS_DIR:-$(pwd)/scripts}"
 mkdir -p "${TMPDIR_ROOT}" "${SCRIPTS_DIR}" \
@@ -54,7 +53,7 @@ if [ ! -f "${DICT_PATH}" ]; then ${GATK_CMD} CreateSequenceDictionary -R "${ref_
 ############################################################
 # 実行モード
 #  - 配列ジョブ（--array）で起動 → 1〜8を“対象サンプルのみ”実行
-#  - 依存実行（--dependency）で起動か RUN_MODE=joint → 9〜11を一括実行
+#  - RUN_MODE=joint → 9〜11を一括実行
 ############################################################
 RUN_MODE="${RUN_MODE:-per_sample}"  # per_sample | joint
 
