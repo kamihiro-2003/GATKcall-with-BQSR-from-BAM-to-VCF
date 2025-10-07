@@ -1,5 +1,6 @@
 # GATKcall-with-BQSR-from-BAM-to-VCF
 遺伝研スパコン上でBQSR（ベースクオリティを向上させることでsnpcallの精度を向上させる方法）を採用したGATKcallのパイプラインを掲載する
+BQSRについて：https://gatk.broadinstitute.org/hc/en-us/articles/360035890531-Base-Quality-Score-Recalibration-BQSR
 
 ## 1) ジョブヘッダと安全設定
 ```
