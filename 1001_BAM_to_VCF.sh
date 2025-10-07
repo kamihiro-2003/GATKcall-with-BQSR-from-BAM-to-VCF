@@ -20,11 +20,6 @@ chr_list="${chr_list:-$HOME/working/Pipeline_SNP_call/reference/chromosomes.list
 
 THREADS="16"
 JAVA_MEM_LOCAL="32g"       # SLURMメモリ(40G)の80%程度
-JAVA_MEM_SLURM="24g"       # 各sbatch子ジョブ用（*引数は変えていません）
-SLURM_HC_PARTITION="short"
-SLURM_HC_TIME="0-1:00:00"
-SLURM_DB_PARTITION="epyc"
-SLURM_DB_TIME="0-24:00:00"
 
 GATK_SIF="${GATK_SIF:-/usr/local/biotools/g/gatk4:4.6.1.0--py310hdfd78af_0}"
 SINGULARITY_BIND="${SINGULARITY_BIND:--B /lustre10/home,/home}"
@@ -51,17 +46,13 @@ DICT_PATH="${REF_DIR}/${genome}.dict"
 if [ ! -f "${DICT_PATH}" ]; then ${GATK_CMD} CreateSequenceDictionary -R "${ref_fasta}" -O "${DICT_PATH}"; fi
 
 ############################################################
-# 実行モード
-#  - 配列ジョブ（--array）で起動 → 1〜8を“対象サンプルのみ”実行
-#  - RUN_MODE=joint → 9〜11を一括実行
+# 実行モード（配列ジョブ: 1〜8 / 共同遺伝型: 9〜11）
 ############################################################
 RUN_MODE="${RUN_MODE:-per_sample}"  # per_sample | joint
 
 # 配列ジョブのインデックスからサンプルを決定（未指定時は0）
 IDX="${SLURM_ARRAY_TASK_ID:-0}"
-if (( IDX < 0 || IDX >= ${#filename[@]} )); then
-  IDX=0
-fi
+if (( IDX < 0 || IDX >= ${#filename[@]} )); then IDX=0; fi
 K="${filename[$IDX]}"
 
 if [[ "${RUN_MODE}" == "per_sample" ]]; then
@@ -146,6 +137,8 @@ if [[ "${RUN_MODE}" == "per_sample" ]]; then
   # 6) ApplyBQSR + index
   ##########################################################
   ${GATK_CMD} ApplyBQSR -R "${ref_fasta}" \
+    -I "./04rmdup/${K}.sort.addRG.fixmate.markdups.bqsr.bam" || true # in case of missing, regen below
+  ${GATK_CMD} ApplyBQSR -R "${ref_fasta}" \
     -I "./04rmdup/${K}.sort.addRG.fixmate.markdups.bam" \
     -bqsr "./06GenomicDB/${K}_recal_data.table" \
     -O "./07bqsr/${K}.sort.addRG.fixmate.markdups.bqsr.bam"
@@ -185,9 +178,8 @@ if [[ "${RUN_MODE}" == "per_sample" ]]; then
 fi
 
 ############################################################
-# 9) 共同遺伝型（全ゲノム一括）… RUN_MODE=joint のときだけ実行
+# 9) 共同遺伝型（全ゲノム一括）
 ############################################################
-# 出力ルート（連番）
 DIR="$(pwd)/geno_${genome}_$(date +%Y%m%d)_1"
 while [ -e "${DIR}" ]; do DIR="${DIR%_*}_$(( ${DIR##*_} + 1 ))"; done
 RUN_ROOT="${DIR}"
@@ -221,7 +213,7 @@ while IFS= read -r chrom; do
   cat > "${script2}" <<EOF
 #!/usr/bin/env bash
 #SBATCH -t 0-24:00:00
-#SBATCH -p ${SLURM_DB_PARTITION}
+#SBATCH -p epyc
 #SBATCH --mem=16G
 #SBATCH -J ${chrom}_combine
 #SBATCH -o ${script2}.log
@@ -252,11 +244,7 @@ EOF
   chmod +x "${script2}"
 
   jid=$(sbatch --parsable "${script2}")
-  if [[ -z "${COMBINE_JIDS_ALL}" ]]; then
-    COMBINE_JIDS_ALL="${jid}"
-  else
-    COMBINE_JIDS_ALL="${COMBINE_JIDS_ALL}:${jid}"
-  fi
+  COMBINE_JIDS_ALL="${COMBINE_JIDS_ALL:+${COMBINE_JIDS_ALL}:}${jid}"
 done < "${chr_list}"
 
 echo "[INFO] submitted per-chrom GVCF jobs: ${COMBINE_JIDS_ALL}"
@@ -343,12 +331,11 @@ echo "[INFO] Merge → ${OUT_DIR}/raw.vcf.gz 完了"
 EOS
 chmod +x "${final_script}"
 
-# 依存（per-chrom が全部 OK の後に実行）
 REPAIR_MISSING="${REPAIR_MISSING:-false}"
 jid_concat=$(sbatch --parsable \
   -J vcf_concat \
   --dependency=afterok:${COMBINE_JIDS_ALL} \
-  -p "${SLURM_DB_PARTITION}" -t "${SLURM_DB_TIME}" --mem=8G \
+  -p epyc -t 0-24:00:00 --mem=8G \
   -o "${RUN_ROOT}/concat.log" -e "${RUN_ROOT}/concat.log" \
   --export=ALL,CHR_LIST_FILE="${chr_list}",PERCHROM_DIR="${PERCHROM_DIR}",OUT_DIR="${RUN_ROOT}",BCFTOOLS="${BCFTOOLS}",REPAIR_MISSING="${REPAIR_MISSING}" \
   "${final_script}")
@@ -356,7 +343,7 @@ jid_concat=$(sbatch --parsable \
 echo "[INFO] submit: vcf_concat ${jid_concat}"
 
 ############################################################
-# 11) フィルタ（GATK） … vcf_concat 成功後に実行
+# 11) フィルタ（GATK）
 ############################################################
 filter_script="${SCRIPTS_DIR}/vcf_filter.sh"
 cat > "${filter_script}" <<'EOS'
@@ -367,7 +354,6 @@ REF="${REF}"
 BCFTOOLS="${BCFTOOLS}"
 IN_VCF="${IN_VCF}"
 OUT_DIR="${OUT_DIR}"
-
 GATK_CMD="${GATK_CMD}"
 
 GATK_MARKED_VCF="${OUT_DIR}/gatk_marked.vcf.gz"
@@ -401,7 +387,7 @@ ${GATK_CMD} SelectVariants \
 # 出力も “tabix(.tbi)” で索引
 "${BCFTOOLS}" index -f -t "${GATK_FILTERED_VCF}"
 
-# 欠損率 20% 超のサイトを除去（fill-tags があれば F_MISSING を利用）
+# 欠損率 20% 超のサイトを除去
 if ${BCFTOOLS} --plugins 2>/dev/null | grep -q fill-tags; then
   ${BCFTOOLS} +fill-tags "${GATK_FILTERED_VCF}" -O u -- -t F_MISSING \
   | ${BCFTOOLS} view -e 'INFO/F_MISSING>0.2' -O z -o "${OUT_VCF}"
@@ -426,7 +412,7 @@ chmod +x "${filter_script}"
 jid_filter=$(sbatch --parsable \
   -J vcf_filter \
   --dependency=afterok:${jid_concat} \
-  -p "${SLURM_DB_PARTITION}" -t 2-:00:00 --mem=12G \
+  -p epyc -t 2-00:00:00 --mem=12G \
   -o "${RUN_ROOT}/vcf_filter_%j.log" -e "${RUN_ROOT}/vcf_filter_%j.log" \
   --export=ALL,REF="${ref_fasta}",BCFTOOLS="${BCFTOOLS}",IN_VCF="${RUN_ROOT}/raw.vcf.gz",OUT_DIR="${RUN_ROOT}",GATK_CMD="${GATK_CMD}" \
   "${filter_script}")
