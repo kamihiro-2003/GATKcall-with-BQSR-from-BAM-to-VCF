@@ -80,30 +80,15 @@ joint呼び出し（全サンプル統合解析）時に、染色体単位で分
 ### 2-2) リソース
 ```
 THREADS="16"
-JAVA_MEM_LOCAL="32g"
-JAVA_MEM_SLURM="24g"
-SLURM_HC_PARTITION="short"
-SLURM_HC_TIME="0-1:00:00"
-SLURM_DB_PARTITION="epyc"
-SLURM_DB_TIME="0-24:00:00"
+JAVA_MEM_LOCAL="32g"  
 ```
 
-このセクションでは、スレッド数やJavaヒープメモリ、そして各ジョブのSLURM実行設定をまとめている。
-
-主に GATK や Spark ベースのツールを安定して動かすためのリソース指定に関わる。
+このセクションでは、スレッド数などの指定をする。
 
 ### スレッド数とメモリ設定
 THREADS は並列実行に使用するCPUコア数。
 
-JAVA_MEM_LOCAL はローカル処理（単一ノード内でのJava実行）に割り当てるヒープメモリ量を指定し、
-
-JAVA_MEM_SLURM はSLURMジョブ内でのGATK実行時に使うメモリ上限を示す。
-
-
-### SLURMジョブ設定
-SLURM_HC_PARTITION および SLURM_HC_TIME は、HaplotypeCallerなど短時間で終わる per-chromosome ジョブの実行パーティションと最大実行時間を指定する。
-
-一方で、SLURM_DB_PARTITION と SLURM_DB_TIME は、GenomicsDBImportやVCF統合など、より長時間かかる結合処理（concat/filterジョブ）用の設定。
+JAVA_MEM_LOCAL はローカル処理（単一ノード内でのJava実行）に割り当てるヒープメモリ量を指定
 
 ### 2-3) ツール
 ```
@@ -317,7 +302,7 @@ while IFS= read -r chrom; do
   cat > "${script2}" <<EOF
 #!/usr/bin/env bash
 #SBATCH -t 0-24:00:00
-#SBATCH -p ${SLURM_DB_PARTITION}
+#SBATCH -p epyc
 #SBATCH --mem=16G
 #SBATCH -J ${chrom}_combine
 ...
@@ -357,7 +342,7 @@ REPAIR_MISSING="${REPAIR_MISSING:-false}"
 jid_concat=$(sbatch --parsable \
   -J vcf_concat \
   --dependency=afterok:${COMBINE_JIDS_ALL} \
-  -p "${SLURM_DB_PARTITION}" -t "${SLURM_DB_TIME}" --mem=8G \
+  -p epyc -t 0-24:00:00 --mem=8G \
   -o "${RUN_ROOT}/concat.log" -e "${RUN_ROOT}/concat.log" \
   --export=ALL,CHR_LIST_FILE="${chr_list}",PERCHROM_DIR="${PERCHROM_DIR}",OUT_DIR="${RUN_ROOT}",BCFTOOLS="${BCFTOOLS}",REPAIR_MISSING="${REPAIR_MISSING}" \
   "${final_script}")
@@ -408,7 +393,7 @@ chmod +x "${filter_script}"
 jid_filter=$(sbatch --parsable \
   -J vcf_filter \
   --dependency=afterok:${jid_concat} \
-  -p "${SLURM_DB_PARTITION}" -t 2-:00:00 --mem=12G \
+  -p epyc -t 2-00:00:00 --mem=12G \
   -o "${RUN_ROOT}/vcf_filter_%j.log" -e "${RUN_ROOT}/vcf_filter_%j.log" \
   --export=ALL,REF="${ref_fasta}",BCFTOOLS="${BCFTOOLS}",IN_VCF="${RUN_ROOT}/raw.vcf.gz",OUT_DIR="${RUN_ROOT}",GATK_CMD="${GATK_CMD}" \
   "${filter_script}")
