@@ -35,6 +35,7 @@ set -euo pipefail
 
 
 ## 2) 要編集パラメータ（入力・リソース・実行系）
+### 2-1) 入力
 ```
 genome="${genome:-201123_Psic.polished.scaffold.masked.10k}"
 REF_DIR="${REF_DIR:-$HOME/working/Pipeline_SNP_call/reference}"
@@ -74,7 +75,7 @@ chr_list は染色体（またはスキャフォルド）のリストファイ�
 joint呼び出し（全サンプル統合解析）時に、染色体単位で分割処理を行う際に使用される。
 
 参考：https://github.com/Zoshoku-GH/NIG-SuperComputer/tree/main/Variant_Calling/GATK_Calling
-
+### 2-2) リソース
 ```
 THREADS="16"
 JAVA_MEM_LOCAL="32g"
@@ -102,6 +103,7 @@ SLURM_HC_PARTITION および SLURM_HC_TIME は、HaplotypeCallerなど短時間�
 
 一方で、SLURM_DB_PARTITION と SLURM_DB_TIME は、GenomicsDBImportやVCF統合など、より長時間かかる結合処理（concat/filterジョブ）用の設定。
 
+### 2-3) ツール
 ```
 GATK_SIF="${GATK_SIF:-/usr/local/biotools/g/gatk4:4.6.1.0--py310hdfd78af_0}"
 SINGULARITY_BIND="${SINGULARITY_BIND:--B /lustre10/home,/home}"
@@ -123,6 +125,7 @@ ANALYZER_CMD は GATK の AnalyzeCovariates など、GATKベースの補助ツ�
 BCFTOOLS は bcftools 実行コマンドのパスを指定する。
 
 環境にbcftoolsがPATH上で通っている場合は明示的に指定する必要はない。
+### 2-4) ディレクトリの作成
 ```
 TMPDIR_ROOT="${TMPDIR_ROOT:-$HOME/working/tmp_gatk}"
 SCRIPTS_DIR="${SCRIPTS_DIR:-$(pwd)/scripts}"
@@ -254,8 +257,7 @@ ${ANALYZER_CMD} BaseRecalibrator ... -O "./07bqsr/${K}_recal_data.table.2" || tr
 ${ANALYZER_CMD} AnalyzeCovariates -before "./06.../${K}_recal_data.table" \
   -after "./07bqsr/${K}_recal_data.table.2" -csv "./08qual_check/${K}_recalibration.csv" || true
 ```
-
-|| true で失敗を許容。品質評価のみで、本流処理には必須ではないため。
+BQSR前と後でのBAMファイルのベースクオリティをCSVで作成し比較できるようにしている。
 
 ## 5.8) 最終 HaplotypeCaller（BQSR後BAM → per-sample gVCF）（09）
 ```
