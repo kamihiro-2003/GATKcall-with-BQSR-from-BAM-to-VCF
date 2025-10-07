@@ -348,7 +348,7 @@ jid_concat=$(sbatch --parsable \
   "${final_script}")
 ```
 
-REPAIR_MISSING: 欠損染色体があっても、ヘッダを借りて空VCFを自動合成→結合継続。
+REPAIR_MISSING:ture→ 欠損染色体があっても、ヘッダを借りて空VCFを自動合成→結合継続。
 
 --export=ALL,... で環境変数を子ジョブに明示伝搬。
 
