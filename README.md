@@ -431,20 +431,7 @@ echo "[INFO] 進捗確認: squeue -u $USER | egrep '(_combine|vcf_concat|vcf_fil
 
 一連のジョブIDを出力し、簡易ウォッチコマンドも表示。
 
-## 8) 出力物まとめ
-```
-per-sample
-09final_gvcf/<SAMPLE>.bqsr.g.vcf.gz（index付）
-07bqsr/...bqsr.bam（index付）
-08qual_check/<SAMPLE>_recalibration.csv（任意）
-joint（geno_${genome}_YYYYMMDD_N/）
-per_chrom/<chrom>_dir/<chrom>.raw.vcf.gz（染色体ごと）
-raw.vcf.gz（concat+sort後の全染色体結合）
-gatk_marked.vcf.gz / gatk_filtered.vcf.gz
-mq40_q30_qd2_sor4_fs60_miss0.2.vcf.gz（最終VCF）
-```
-
-## 10) 推奨実行例
+## 9) 推奨実行例
 ### per-sample（1サンプル）
 ```
 # filenameを特定の個体名に変更したうえで
