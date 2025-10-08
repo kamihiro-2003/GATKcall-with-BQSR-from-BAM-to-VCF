@@ -3,6 +3,8 @@
 
 BQSRについて：https://gatk.broadinstitute.org/hc/en-us/articles/360035890531-Base-Quality-Score-Recalibration-BQSR
 
+wordでも少しまとめておいたので同ディレクトリ内の"BQSR概要"から参考にしていただけると幸いです。
+
 ## 1) ジョブヘッダと安全設定
 ```
 #!/usr/bin/env bash
@@ -88,7 +90,7 @@ JAVA_MEM_LOCAL="32g"
 ### スレッド数とメモリ設定
 THREADS は並列実行に使用するCPUコア数。
 
-JAVA_MEM_LOCAL はローカル処理（単一ノード内でのJava実行）に割り当てるヒープメモリ量を指定
+JAVA_MEM_LOCAL はローカル処理（単一ノード内でのJava実行）に割り当てるメモリ量を指定
 
 ### 2-3) ツール
 ```
